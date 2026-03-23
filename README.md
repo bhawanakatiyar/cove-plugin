@@ -35,7 +35,13 @@ chmod +x /usr/local/bin/cove-verify
 
 ### 2. Configure
 
-Edit `config/default.yaml`:
+Copy the default config to your OpenClaw directory:
+
+```bash
+cp config/default.yaml ~/.openclaw/cove.yaml
+```
+
+Then edit `~/.openclaw/cove.yaml`:
 
 ```yaml
 policy: "basic"                    # basic | standard | deep
@@ -49,7 +55,9 @@ knowledge_sources:
   enable_web_search: false         # Enable Brave Search (needs API key)
 ```
 
-Or place a `cove.yaml` in `~/.openclaw/` for per-installation config.
+The plugin looks for config in this order:
+1. `~/.openclaw/cove.yaml` (recommended — user-editable)
+2. `<plugin-dir>/config/default.yaml` (fallback defaults)
 
 ### 3. Use
 
