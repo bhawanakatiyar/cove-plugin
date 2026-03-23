@@ -99,6 +99,23 @@ const braveKey = getBraveApiKey();
 assert(typeof getBraveApiKey === 'function', 'getBraveApiKey is a function');
 console.log(`    Brave API key: ${braveKey ? 'found' : 'not configured'}`);
 
+// ── Vector store tests ──────────────────────────────────────────────────────
+
+console.log('\n🗄️  Vector store tests');
+
+const { queryVectorStore, listProviders } = require('./src/vector_store');
+assert(typeof queryVectorStore === 'function', 'queryVectorStore is a function');
+assert(typeof listProviders === 'function', 'listProviders is a function');
+
+const providers = listProviders();
+assert(providers.includes('qdrant'), 'Supports Qdrant');
+assert(providers.includes('chroma'), 'Supports Chroma');
+assert(providers.includes('weaviate'), 'Supports Weaviate');
+assert(providers.includes('milvus'), 'Supports Milvus');
+assert(providers.includes('redis'), 'Supports Redis');
+assert(providers.includes('openviking'), 'Supports OpenViking');
+console.log(`    Providers: ${providers.join(', ')}`);
+
 // ── Live integration test ───────────────────────────────────────────────────
 
 if (process.env.COVE_LIVE_TEST === '1') {

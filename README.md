@@ -8,6 +8,10 @@ CoVe brings **Chain of Verification** to your [OpenClaw](https://openclaw.sh) ag
 
 ```
 LLM Response → Extract Claims → Verify Against Sources → Auto-Correct → ✅ Accurate Response
+                                        ↑
+                         ┌──────────────┼──────────────┐
+                     Memory/Files   Vector Store    Web Search
+                    (local files)  (Qdrant, etc.)    (Brave)
 ```
 
 1. **Extraction** — An LLM call identifies all specific factual claims in the response (names, dates, numbers, metrics, etc.)
@@ -81,9 +85,44 @@ cove-verify -r "The API limit is 1000 req/min." -f json
 
 | Policy | Sources | Best For |
 |--------|---------|----------|
-| **basic** | Memory + workspace files | Internal facts (customers, products, configs) |
-| **standard** | Memory + workspace + web search | Facts that may need external confirmation |
+| **basic** | Memory + workspace + vector store | Internal facts (customers, products, configs) |
+| **standard** | All of basic + web search | Facts that may need external confirmation |
 | **deep** | All sources + multi-step reasoning | Critical claims, compliance, financial data |
+
+## Vector Store Integration
+
+CoVe can verify claims against external vector databases for semantic search over large knowledge bases. Supported providers:
+
+| Provider | Config key | Documentation |
+|----------|-----------|---------------|
+| **Qdrant** | `qdrant` | [qdrant.tech](https://qdrant.tech) |
+| **Chroma** | `chroma` | [trychroma.com](https://www.trychroma.com) |
+| **Weaviate** | `weaviate` | [weaviate.io](https://weaviate.io) |
+| **Milvus** | `milvus` | [milvus.io](https://milvus.io) |
+| **Redis Vector** | `redis` | [redis.io](https://redis.io/docs/interact/search-and-query/) |
+| **OpenViking** | `openviking` | OpenViking vector search |
+
+Add to `~/.openclaw/cove.yaml`:
+
+```yaml
+vector_store:
+  provider: "qdrant"              # qdrant | chroma | weaviate | milvus | redis | openviking
+  url: "http://localhost:6333"    # Vector DB endpoint
+  collection: "knowledge"         # Collection/index name
+  api_key: ""                     # Optional auth key
+  top_k: 5                        # Results per query
+  score_threshold: 0.7            # Minimum similarity (0-1)
+```
+
+Vector store results are combined with local file knowledge before verification. The LLM sees both sources and uses whichever is most relevant for each claim.
+
+**How it works:**
+1. Each extracted claim is sent as a query to the vector store
+2. The top-k most similar chunks are retrieved
+3. Results are injected into the verification prompt alongside local files
+4. The LLM cross-references all sources to verify or refute each claim
+
+**No native dependencies** — all adapters use the vector DB's HTTP REST API. Embeddings for vector search are generated via the OpenClaw sidecar proxy.
 
 ## Example Output
 
@@ -122,11 +161,11 @@ cove-plugin/
 ├── src/
 │   ├── verifier.js       # CLI entry point
 │   ├── verify_claims.js  # Core orchestrator (extract → verify → correct)
-│   ├── knowledge.js      # Knowledge source reader (memory, workspace, docs)
+│   ├── knowledge.js      # Knowledge source reader (memory, workspace, SQLite, docs)
+│   ├── vector_store.js   # Vector DB adapters (Qdrant, Chroma, Weaviate, Milvus, Redis, OpenViking)
 │   ├── web_search.js     # Brave Search integration
 │   ├── config.js         # YAML config loader (zero dependencies)
-│   ├── csm-logger.js     # Structured logging
-│   └── extraction-prompt.txt  # Claim extraction system prompt
+│   └── csm-logger.js     # Structured logging
 ├── test_simulation.js    # Test runner
 ├── package.json
 ├── LICENSE

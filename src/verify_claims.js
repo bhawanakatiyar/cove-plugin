@@ -12,6 +12,7 @@
 const http = require('http');
 const { loadKnowledge } = require('./knowledge');
 const { searchWeb } = require('./web_search');
+const { queryVectorStore } = require('./vector_store');
 const { loadConfig } = require('./config');
 const { logResult } = require('./csm-logger');
 
@@ -217,15 +218,27 @@ async function verifyResponse(originalResponse, overrides = {}) {
   // Step 2: Gather knowledge context
   const knowledgeContext = loadKnowledge(config);
 
-  // Step 2b: Web search if policy allows
+  // Step 2b: Vector store search if configured
+  let vectorContext = null;
+  if (config.vector_store && config.vector_store.provider) {
+    const searchQueries = claims.map(c => c.claim);
+    vectorContext = await queryVectorStore(searchQueries, config);
+  }
+
+  // Step 2c: Web search if policy allows
   let webContext = null;
   if (config.policy === 'standard' || config.policy === 'deep') {
     const searchQueries = claims.map(c => c.claim);
     webContext = await searchWeb(searchQueries, config);
   }
 
-  // Step 3: Verify claims
-  const results = await verifyClaims(claims, knowledgeContext, webContext);
+  // Step 3: Verify claims — combine all knowledge sources
+  let combinedContext = knowledgeContext;
+  if (vectorContext) {
+    combinedContext += '\n\n--- VECTOR STORE RESULTS ---\n' + vectorContext;
+  }
+
+  const results = await verifyClaims(claims, combinedContext, webContext);
 
   // Step 4: Categorize
   const verified = results.filter(r => r.status === 'verified');
