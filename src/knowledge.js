@@ -3,7 +3,8 @@
  *
  * Works with any OpenClaw installation by reading from standard paths:
  *   ~/.openclaw/workspace/         — user workspace files
- *   ~/.openclaw/workspace/memory/  — agent memory files
+ *   ~/.openclaw/workspace/memory/  — agent memory flush files (.md)
+ *   ~/.openclaw/memory/main.sqlite — agent memory database (chunks table)
  *   ~/.openclaw/agents/[id]/sessions/ -- skipped, too large
  */
 
@@ -14,6 +15,7 @@ const HOME = process.env.HOME || '/home/bk';
 const OPENCLAW_DIR = path.join(HOME, '.openclaw');
 const WORKSPACE = path.join(OPENCLAW_DIR, 'workspace');
 const MEMORY_DIR = path.join(WORKSPACE, 'memory');
+const MEMORY_DB = path.join(OPENCLAW_DIR, 'memory', 'main.sqlite');
 
 // File extensions we can read as knowledge
 const TEXT_EXTENSIONS = new Set([
@@ -86,6 +88,80 @@ function readFile(filePath) {
 }
 
 /**
+ * Read text chunks from the OpenClaw memory SQLite database.
+ * Uses a lightweight pure-JS approach — scans the SQLite file for text
+ * content in the 'chunks' table without requiring native SQLite bindings.
+ *
+ * The chunks table stores: id, path, source, start_line, end_line, hash, model, text, embedding, updated_at
+ * We extract the 'text' field which contains the actual memory content.
+ *
+ * @returns {string[]} Array of memory text chunks.
+ */
+function readMemoryDb() {
+  try {
+    if (!fs.existsSync(MEMORY_DB)) return [];
+    const buf = fs.readFileSync(MEMORY_DB);
+    if (buf.length < 100) return [];
+
+    // Strategy: SQLite stores row data in pages. Text fields in the chunks
+    // table contain the actual memory content. We scan for sequences of
+    // printable UTF-8 that look like memory entries (longer than 80 chars,
+    // not SQL schema, not JSON embeddings, not binary data).
+    const chunks = [];
+    let current = '';
+
+    for (let i = 0; i < buf.length; i++) {
+      const byte = buf[i];
+      // Printable ASCII + common UTF-8 + newlines/tabs
+      if ((byte >= 32 && byte < 127) || byte === 10 || byte === 13 || byte === 9) {
+        current += String.fromCharCode(byte);
+      } else {
+        if (current.length > 80) {
+          const trimmed = current.trim();
+          // Filter out SQL schema, embedding vectors, metadata JSON, and index data
+          if (trimmed &&
+              !trimmed.startsWith('CREATE ') &&
+              !trimmed.startsWith('SQLite') &&
+              !trimmed.includes('PRIMARY KEY') &&
+              !trimmed.includes('UNINDEXED') &&
+              !trimmed.includes('WITHOUT ROWID') &&
+              !trimmed.startsWith('[') && // embedding arrays
+              !trimmed.startsWith('{') && // JSON metadata
+              !/^[-0-9.,e\s]+$/.test(trimmed) && // numeric arrays
+              !trimmed.includes('idx_') &&
+              !trimmed.includes('autoindex')) {
+            chunks.push(trimmed);
+          }
+        }
+        current = '';
+      }
+    }
+    // Don't forget the last chunk
+    if (current.length > 80) {
+      const trimmed = current.trim();
+      if (trimmed && !trimmed.startsWith('CREATE ') && !trimmed.startsWith('[') && !trimmed.startsWith('{')) {
+        chunks.push(trimmed);
+      }
+    }
+
+    // Deduplicate and cap at 20KB total
+    const seen = new Set();
+    const unique = [];
+    let totalLen = 0;
+    for (const c of chunks) {
+      if (seen.has(c) || totalLen > 20000) break;
+      seen.add(c);
+      unique.push(c);
+      totalLen += c.length;
+    }
+
+    return unique;
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Load all relevant knowledge based on config.
  * Returns a single string of concatenated source contents, capped at 50 KB.
  *
@@ -98,7 +174,13 @@ function loadKnowledge(config) {
 
   // 1. System memory (always on by default)
   if (sources.use_system_memory !== false) {
+    // 1a. Memory flush files (markdown)
     allFiles.push(...readDir(MEMORY_DIR, 2));
+    // 1b. Memory database (SQLite — extract text chunks)
+    const dbChunks = readMemoryDb();
+    if (dbChunks.length > 0) {
+      allFiles.push({ path: '.openclaw/memory/main.sqlite (chunks)', content: dbChunks.join('\n\n') });
+    }
   }
 
   // 2. Workspace root files (non-recursive, just top-level docs)
@@ -164,4 +246,4 @@ function loadKnowledge(config) {
   return context;
 }
 
-module.exports = { loadKnowledge, readDir, readFile };
+module.exports = { loadKnowledge, readDir, readFile, readMemoryDb };
