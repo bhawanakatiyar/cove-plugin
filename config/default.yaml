@@ -1,0 +1,12 @@
+# Default Verification Configuration
+policy: "basic" # basic | standard | deep
+max_correction_attempts: 1
+auto_correct: true # If false, just notify the user of inaccuracies
+log_results_to_dashboard: true 
+model_override: "gemini"
+auto_verify: false
+
+knowledge_sources:
+  use_system_memory: true
+  document_paths: ["/home/bk/docs/knowledge"]
+  enable_web_search: true

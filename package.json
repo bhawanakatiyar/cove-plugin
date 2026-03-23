@@ -1,0 +1,12 @@
+{
+  "name": "cove-plugin",
+  "version": "1.0.0",
+  "description": "Chain of Verification (CoV) plugin for OpenClaw LLM pipelines.",
+  "main": "src/verify_claims.js",
+  "scripts": {
+    "test": "node test_simulation.js"
+  },
+  "keywords": ["openclaw", "llm", "verification", "cove"],
+  "author": "OpenClaw Contributor",
+  "license": "MIT"
+}

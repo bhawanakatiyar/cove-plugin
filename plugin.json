@@ -1,0 +1,8 @@
+{
+  "id": "cove-verification",
+  "name": "Cove Plugin",
+  "description": "Fact-checks LLM output claims against memory and search.",
+  "version": "1.0.0",
+  "entry": "src/verify_claims.js",
+  "config": "config/default.yaml"
+}
