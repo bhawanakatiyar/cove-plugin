@@ -1,8 +1,12 @@
 {
   "id": "cove-verification",
-  "name": "Cove Plugin",
-  "description": "Fact-checks LLM output claims against memory and search.",
+  "name": "CoVe — Chain of Verification",
+  "description": "Fact-checks LLM responses by extracting claims and verifying them against memory, workspace files, and web search.",
   "version": "1.0.0",
   "entry": "src/verify_claims.js",
-  "config": "config/default.yaml"
+  "cli": "src/verifier.js",
+  "skill": "SKILL.md",
+  "config": "config/default.yaml",
+  "license": "MIT",
+  "homepage": "https://github.com/bhawanakatiyar/cove-plugin"
 }

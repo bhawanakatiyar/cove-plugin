@@ -1,12 +1,32 @@
 {
   "name": "cove-plugin",
   "version": "1.0.0",
-  "description": "Chain of Verification (CoV) plugin for OpenClaw LLM pipelines.",
+  "description": "Chain of Verification (CoVe) plugin for OpenClaw — fact-check LLM responses against memory, workspace, and web search.",
   "main": "src/verify_claims.js",
-  "scripts": {
-    "test": "node test_simulation.js"
+  "bin": {
+    "cove-verify": "src/verifier.js"
   },
-  "keywords": ["openclaw", "llm", "verification", "cove"],
-  "author": "OpenClaw Contributor",
-  "license": "MIT"
+  "scripts": {
+    "test": "node test_simulation.js",
+    "test:live": "COVE_LIVE_TEST=1 node test_simulation.js"
+  },
+  "keywords": [
+    "openclaw",
+    "llm",
+    "verification",
+    "cove",
+    "chain-of-verification",
+    "fact-check",
+    "hallucination",
+    "ai-safety"
+  ],
+  "author": "bhawanakatiyar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bhawanakatiyar/cove-plugin.git"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
