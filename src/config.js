@@ -25,6 +25,10 @@ const DEFAULTS = {
   proxy_port: 8888,
   model: 'gemini-2.0-flash',
   brave_api_key: null,
+  // Direct LLM API mode (no sidecar required)
+  // Provider: 'gemini' | 'anthropic' | 'openai' | null (null = use sidecar)
+  llm_provider: null,
+  llm_api_key: null,
 };
 
 /**
@@ -127,6 +131,22 @@ function loadConfig() {
   merged.proxy_port = parseInt(process.env.OPENCLAW_PROXY_PORT || String(merged.proxy_port), 10);
   merged.model = process.env.COVE_MODEL || merged.model_override || merged.model;
   merged.brave_api_key = process.env.BRAVE_API_KEY || resolveBraveKeyFromFile() || merged.brave_api_key || null;
+
+  // Direct LLM provider — auto-detect from available API keys if not explicitly set
+  merged.llm_api_key = process.env.COVE_LLM_API_KEY
+    || process.env.GEMINI_API_KEY
+    || process.env.ANTHROPIC_API_KEY
+    || process.env.OPENAI_API_KEY
+    || merged.llm_api_key || null;
+
+  if (process.env.COVE_LLM_PROVIDER) {
+    merged.llm_provider = process.env.COVE_LLM_PROVIDER;
+  } else if (!merged.llm_provider && merged.llm_api_key) {
+    // Auto-detect provider from which env var was set
+    if (process.env.GEMINI_API_KEY) merged.llm_provider = 'gemini';
+    else if (process.env.ANTHROPIC_API_KEY) merged.llm_provider = 'anthropic';
+    else if (process.env.OPENAI_API_KEY) merged.llm_provider = 'openai';
+  }
 
   return merged;
 }

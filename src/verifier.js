@@ -6,11 +6,20 @@
  *   cove-verify --response "text to verify" [--policy basic|standard|deep] [--strict] [--format text|json]
  *   echo "text" | cove-verify --stdin [--policy standard]
  *
- * Environment variables:
+ * Environment variables (direct API — no sidecar required):
+ *   GEMINI_API_KEY       — Use Gemini directly (auto-detects provider)
+ *   ANTHROPIC_API_KEY    — Use Claude directly (auto-detects provider)
+ *   OPENAI_API_KEY       — Use OpenAI directly (auto-detects provider)
+ *   COVE_LLM_PROVIDER    — Explicit provider override: gemini | anthropic | openai
+ *   COVE_LLM_API_KEY     — Explicit API key (overrides provider-specific vars)
+ *
+ * Environment variables (sidecar mode):
  *   OPENCLAW_PROXY_PORT  — Sidecar proxy port (default: 8888)
  *   SIDECAR_PROXY_KEY    — Proxy auth key (if required)
+ *
+ * Common:
  *   COVE_MODEL           — Model to use for verification (default: gemini-2.0-flash)
- *   BRAVE_API_KEY         — Brave Search API key (for standard/deep policies)
+ *   BRAVE_API_KEY        — Brave Search API key (for standard/deep policies)
  */
 
 const { verifyResponse } = require('./verify_claims');
@@ -50,9 +59,18 @@ Policies:
   standard   Also search the web (requires Brave API key)
   deep       Multi-step reasoning with web search and confidence scoring
 
-Environment:
+Environment (direct API — no sidecar required):
+  GEMINI_API_KEY        Use Gemini directly (auto-detects provider)
+  ANTHROPIC_API_KEY     Use Claude directly (auto-detects provider)
+  OPENAI_API_KEY        Use OpenAI directly (auto-detects provider)
+  COVE_LLM_PROVIDER     Explicit provider: gemini | anthropic | openai
+  COVE_LLM_API_KEY      Explicit API key (overrides provider-specific vars)
+
+Environment (sidecar mode — used when no API key is set):
   OPENCLAW_PROXY_PORT   Sidecar port (default: 8888)
   SIDECAR_PROXY_KEY     Proxy auth key
+
+Common:
   COVE_MODEL            LLM model for verification
   BRAVE_API_KEY         Brave Search API key
 `);

@@ -5,11 +5,13 @@
  * the user's knowledge sources (memory, workspace, web search), and
  * optionally rewrites the response with corrections.
  *
- * Works with any OpenClaw installation — routes LLM calls through the
- * local sidecar proxy at localhost:8888.
+ * Works standalone or with OpenClaw. If an LLM API key is configured
+ * (GEMINI_API_KEY, ANTHROPIC_API_KEY, or OPENAI_API_KEY), calls the
+ * provider directly. Otherwise routes through the OpenClaw sidecar proxy.
  */
 
 const http = require('http');
+const https = require('https');
 const { loadKnowledge } = require('./knowledge');
 const { searchWeb } = require('./web_search');
 const { queryVectorStore } = require('./vector_store');
@@ -19,14 +21,132 @@ const { logResult } = require('./csm-logger');
 // ── LLM helper ──────────────────────────────────────────────────────────────
 
 /**
- * Call the LLM via the OpenClaw sidecar proxy (localhost:8888/v1/chat/completions).
- * This works with any provider the user has configured (Gemini, Claude, etc).
+ * Provider-specific API configurations.
+ * Each provider defines how to build the request for its API.
+ */
+const PROVIDERS = {
+  gemini: {
+    hostname: 'generativelanguage.googleapis.com',
+    buildPath: (model, apiKey) =>
+      `/v1beta/models/${model}:generateContent?key=${apiKey}`,
+    defaultModel: 'gemini-2.0-flash',
+    buildBody: (messages, options) => ({
+      contents: messages.map(m => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      })),
+      generationConfig: {
+        maxOutputTokens: options.maxTokens || 2048,
+        temperature: options.temperature ?? 0.1,
+      },
+    }),
+    extractContent: (data) => {
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    },
+  },
+
+  anthropic: {
+    hostname: 'api.anthropic.com',
+    buildPath: () => '/v1/messages',
+    defaultModel: 'claude-sonnet-4-6-20250514',
+    buildHeaders: (apiKey) => ({
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    }),
+    buildBody: (messages, options, model) => {
+      // Anthropic expects system as a top-level field, not in messages
+      const system = messages.filter(m => m.role === 'system').map(m => m.content).join('\n');
+      const msgs = messages.filter(m => m.role !== 'system');
+      return {
+        model,
+        max_tokens: options.maxTokens || 2048,
+        temperature: options.temperature ?? 0.1,
+        ...(system ? { system } : {}),
+        messages: msgs,
+      };
+    },
+    extractContent: (data) => {
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      return data.content?.[0]?.text || '';
+    },
+  },
+
+  openai: {
+    hostname: 'api.openai.com',
+    buildPath: () => '/v1/chat/completions',
+    defaultModel: 'gpt-4o-mini',
+    buildHeaders: (apiKey) => ({ Authorization: `Bearer ${apiKey}` }),
+    buildBody: (messages, options, model) => ({
+      model,
+      messages,
+      max_tokens: options.maxTokens || 2048,
+      temperature: options.temperature ?? 0.1,
+    }),
+    extractContent: (data) => {
+      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+      return data.choices?.[0]?.message?.content || '';
+    },
+  },
+};
+
+/**
+ * Make an HTTPS request and return the parsed JSON response.
+ */
+function httpsPost(hostname, path, headers, body, timeout) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = https.request({
+      hostname,
+      port: 443,
+      path,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+        ...headers,
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch { reject(new Error(`Failed to parse response: ${data.slice(0, 300)}`)); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('LLM request timed out')); });
+    req.write(payload);
+    req.end();
+  });
+}
+
+/**
+ * Call the LLM — routes to a direct provider API or the OpenClaw sidecar proxy.
+ *
+ * If config.llm_provider is set (gemini/anthropic/openai), calls the provider
+ * API directly using config.llm_api_key. Otherwise, routes through the local
+ * sidecar proxy at localhost:{proxy_port}.
  *
  * @param {Array} messages - Chat messages.
  * @param {object} options - Request options (maxTokens, temperature, timeout).
- * @param {object} config  - Resolved config from config.js (proxy_key, proxy_port, model).
+ * @param {object} config  - Resolved config from config.js.
  */
-function callLLM(messages, options = {}, config = {}) {
+async function callLLM(messages, options = {}, config = {}) {
+  const timeout = options.timeout || 30000;
+  const provider = PROVIDERS[config.llm_provider];
+
+  // Direct API mode
+  if (provider && config.llm_api_key) {
+    const model = options.model || config.model || provider.defaultModel;
+    const path = provider.buildPath(model, config.llm_api_key);
+    const headers = provider.buildHeaders ? provider.buildHeaders(config.llm_api_key) : {};
+    const body = provider.buildBody(messages, options, model);
+    const data = await httpsPost(provider.hostname, path, headers, body, timeout);
+    return provider.extractContent(data);
+  }
+
+  // Sidecar proxy mode (original behavior)
   return new Promise((resolve, reject) => {
     const proxyKey = config.proxy_key || '';
     const port = config.proxy_port || 8888;
@@ -65,7 +185,7 @@ function callLLM(messages, options = {}, config = {}) {
     });
 
     req.on('error', reject);
-    req.setTimeout(options.timeout || 30000, () => { req.destroy(); reject(new Error('LLM request timed out')); });
+    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('LLM request timed out')); });
     req.write(body);
     req.end();
   });

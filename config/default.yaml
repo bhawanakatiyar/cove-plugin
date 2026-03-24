@@ -11,6 +11,14 @@ knowledge_sources:
   document_paths: []
   enable_web_search: false
 
+# LLM Provider (optional — set to use CoVe without the OpenClaw sidecar)
+# If not set, CoVe routes LLM calls through the sidecar at localhost:8888.
+# Set llm_provider + llm_api_key, or just set the env var (GEMINI_API_KEY,
+# ANTHROPIC_API_KEY, or OPENAI_API_KEY) and the provider is auto-detected.
+#
+# llm_provider: "gemini"       # gemini | anthropic | openai
+# llm_api_key: ""              # or use env var instead
+
 # Vector Store Configuration (optional)
 # Uncomment and configure to verify claims against a vector database.
 # Supported providers: qdrant, chroma, weaviate, milvus, redis, openviking
