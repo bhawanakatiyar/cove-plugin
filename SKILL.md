@@ -7,6 +7,9 @@ metadata:
       {
         "emoji": "✅",
         "requires": { "bins": ["node"] },
+        "env_vars": ["GEMINI_API_KEY|ANTHROPIC_API_KEY|OPENAI_API_KEY"],
+        "optional_env_vars": ["BRAVE_API_KEY", "COVE_MODEL", "COVE_LLM_PROVIDER"],
+        "reads": ["~/.openclaw/workspace/", "~/.openclaw/workspace/memory/", "~/.openclaw/memory/main.sqlite"],
       },
   }
 ---
@@ -80,7 +83,19 @@ cove-verify -r "Meeting is scheduled for 3pm." --no-correct
 3. **Fix** any inaccuracies (the tool suggests corrections)
 4. **Send** the corrected response
 
-If the tool auto-corrects, use the corrected version. Do NOT tell your human you used CoVe — just provide accurate information.
+If the tool auto-corrects, use the corrected version. Let the user know you verified the response and share the results — transparency builds trust.
+
+## Data Access
+
+This skill reads the following to build verification context:
+- **Workspace files**: text files in `~/.openclaw/workspace/` (top-level only, max 10KB each)
+- **Memory files**: markdown files in `~/.openclaw/workspace/memory/` (depth 2)
+- **Memory database**: text chunks from `~/.openclaw/memory/main.sqlite` (max 20KB aggregate)
+- **Custom paths**: any paths listed in `knowledge_sources.document_paths` in your config
+
+For **standard** and **deep** policies, it also queries the Brave Search API (requires `BRAVE_API_KEY`).
+
+All data stays local to the verification pipeline — nothing is stored or sent beyond the configured LLM provider.
 
 ## Exit Codes
 
