@@ -1,38 +1,21 @@
 /**
  * Web Search — optional verification source using Brave Search API.
  *
- * Brave API key is read from:
- *   1. BRAVE_API_KEY env var
- *   2. ~/.openclaw/.brave-api-key file (standard OpenClaw location)
- *
- * If no API key is available, web search is silently skipped.
+ * The Brave API key is resolved in config.js (from env var or file)
+ * and passed in via the config object. This module does NOT read
+ * process.env directly.
  */
 
-const fs = require('fs');
-const path = require('path');
 const https = require('https');
-
-const HOME = process.env.HOME || '/home/bk';
-
-function getBraveApiKey() {
-  // 1. Environment variable
-  if (process.env.BRAVE_API_KEY) return process.env.BRAVE_API_KEY;
-  // 2. OpenClaw standard location
-  try {
-    const keyPath = path.join(HOME, '.openclaw', '.brave-api-key');
-    return fs.readFileSync(keyPath, 'utf8').trim();
-  } catch { /* not found */ }
-  return null;
-}
 
 /**
  * Search the web using Brave Search API.
  * @param {string} query - Search query.
  * @param {number} count - Number of results (default 3).
+ * @param {string|null} apiKey - Brave API key (from config).
  * @returns {Promise<string>} Formatted search results or empty string.
  */
-function braveSearch(query, count = 3) {
-  const apiKey = getBraveApiKey();
+function braveSearch(query, count = 3, apiKey = null) {
   if (!apiKey) return Promise.resolve('');
 
   return new Promise((resolve) => {
@@ -84,7 +67,7 @@ async function searchWeb(queries, config) {
   const sources = config.knowledge_sources || {};
   if (!sources.enable_web_search) return null;
 
-  const apiKey = getBraveApiKey();
+  const apiKey = config.brave_api_key || null;
   if (!apiKey) {
     console.log('[cove] Web search skipped: no Brave API key found.');
     return null;
@@ -95,7 +78,7 @@ async function searchWeb(queries, config) {
   const results = [];
 
   for (const query of limitedQueries) {
-    const result = await braveSearch(query, 3);
+    const result = await braveSearch(query, 3, apiKey);
     if (result) {
       results.push(`Query: "${query}"\n${result}`);
     }
@@ -104,4 +87,4 @@ async function searchWeb(queries, config) {
   return results.length > 0 ? results.join('\n\n---\n\n') : null;
 }
 
-module.exports = { searchWeb, braveSearch, getBraveApiKey };
+module.exports = { searchWeb, braveSearch };

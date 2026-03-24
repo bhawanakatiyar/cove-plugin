@@ -21,12 +21,16 @@ const { logResult } = require('./csm-logger');
 /**
  * Call the LLM via the OpenClaw sidecar proxy (localhost:8888/v1/chat/completions).
  * This works with any provider the user has configured (Gemini, Claude, etc).
+ *
+ * @param {Array} messages - Chat messages.
+ * @param {object} options - Request options (maxTokens, temperature, timeout).
+ * @param {object} config  - Resolved config from config.js (proxy_key, proxy_port, model).
  */
-function callLLM(messages, options = {}) {
+function callLLM(messages, options = {}, config = {}) {
   return new Promise((resolve, reject) => {
-    const proxyKey = process.env.SIDECAR_PROXY_KEY || process.env.OPENCLAW_PROXY_KEY || '';
-    const port = parseInt(process.env.OPENCLAW_PROXY_PORT || '8888', 10);
-    const model = options.model || process.env.COVE_MODEL || 'gemini-2.0-flash';
+    const proxyKey = config.proxy_key || '';
+    const port = config.proxy_port || 8888;
+    const model = options.model || config.model || 'gemini-2.0-flash';
 
     const body = JSON.stringify({
       model,
@@ -91,11 +95,11 @@ Return ONLY a JSON array — no markdown, no explanation:
 
 If there are no verifiable claims, return: []`;
 
-async function extractClaims(response) {
+async function extractClaims(response, config) {
   const result = await callLLM([
     { role: 'system', content: EXTRACTION_PROMPT },
     { role: 'user', content: response },
-  ]);
+  ], {}, config);
 
   const match = result.match(/\[[\s\S]*\]/);
   if (!match) return [];
@@ -131,7 +135,7 @@ Return ONLY a JSON array — no markdown, no explanation:
   "correction": "correct information if inaccurate, otherwise null"
 }]`;
 
-async function verifyClaims(claims, knowledgeContext, webContext) {
+async function verifyClaims(claims, knowledgeContext, webContext, config) {
   let context = knowledgeContext;
   if (webContext) {
     context += '\n\n--- WEB SEARCH RESULTS ---\n' + webContext;
@@ -140,7 +144,7 @@ async function verifyClaims(claims, knowledgeContext, webContext) {
   const result = await callLLM([
     { role: 'system', content: VERIFICATION_PROMPT },
     { role: 'user', content: `Claims to verify:\n${JSON.stringify(claims, null, 2)}\n\nKnowledge Base:\n${context}` },
-  ]);
+  ], {}, config);
 
   const match = result.match(/\[[\s\S]*\]/);
   if (!match) return claims.map(c => ({ ...c, status: 'unverifiable', source: null, evidence: null, correction: null }));
@@ -181,7 +185,7 @@ async function performCorrectionLoop(originalResponse, inaccuracies, config) {
     corrected = await callLLM([
       { role: 'system', content: CORRECTION_PROMPT },
       { role: 'user', content: `Original response:\n${corrected}\n\nInaccuracies found:\n${corrections}` },
-    ]);
+    ], {}, config);
   }
 
   return corrected;
@@ -201,7 +205,7 @@ async function verifyResponse(originalResponse, overrides = {}) {
   const startTime = Date.now();
 
   // Step 1: Extract claims
-  const claims = await extractClaims(originalResponse);
+  const claims = await extractClaims(originalResponse, config);
   if (claims.length === 0) {
     const report = {
       verified: true,
@@ -238,7 +242,7 @@ async function verifyResponse(originalResponse, overrides = {}) {
     combinedContext += '\n\n--- VECTOR STORE RESULTS ---\n' + vectorContext;
   }
 
-  const results = await verifyClaims(claims, combinedContext, webContext);
+  const results = await verifyClaims(claims, combinedContext, webContext, config);
 
   // Step 4: Categorize
   const verified = results.filter(r => r.status === 'verified');

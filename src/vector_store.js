@@ -62,9 +62,9 @@ function httpRequest(url, options = {}) {
  * Get embedding vector for a text query via the OpenClaw sidecar proxy.
  * Falls back to text search if embeddings are not available.
  */
-async function getEmbedding(text) {
-  const port = parseInt(process.env.OPENCLAW_PROXY_PORT || '8888', 10);
-  const proxyKey = process.env.SIDECAR_PROXY_KEY || process.env.OPENCLAW_PROXY_KEY || '';
+async function getEmbedding(text, config = {}) {
+  const port = config.proxy_port || 8888;
+  const proxyKey = config.proxy_key || '';
 
   try {
     const res = await httpRequest(`http://127.0.0.1:${port}/v1/embeddings`, {
@@ -91,7 +91,7 @@ const adapters = {
    */
   async qdrant(query, config) {
     const { url, collection, api_key, top_k = 5, score_threshold = 0.7 } = config;
-    const embedding = await getEmbedding(query);
+    const embedding = await getEmbedding(query, config);
     if (!embedding) return [];
 
     const headers = {};
@@ -198,7 +198,7 @@ const adapters = {
    */
   async milvus(query, config) {
     const { url, collection, api_key, top_k = 5 } = config;
-    const embedding = await getEmbedding(query);
+    const embedding = await getEmbedding(query, config);
     if (!embedding) return [];
 
     const headers = {};
@@ -230,7 +230,7 @@ const adapters = {
    */
   async redis(query, config) {
     const { url, collection, api_key, top_k = 5 } = config;
-    const embedding = await getEmbedding(query);
+    const embedding = await getEmbedding(query, config);
     if (!embedding) return [];
 
     const headers = {};
@@ -269,7 +269,7 @@ const adapters = {
    */
   async openviking(query, config) {
     const { url, collection, api_key, top_k = 5 } = config;
-    const embedding = await getEmbedding(query);
+    const embedding = await getEmbedding(query, config);
 
     const headers = {};
     if (api_key) headers['Authorization'] = `Bearer ${api_key}`;
@@ -321,13 +321,16 @@ async function queryVectorStore(queries, config) {
     return null;
   }
 
+  // Pass proxy settings alongside vector store config so adapters can call getEmbedding
+  const adapterConfig = { ...vsConfig, proxy_port: config.proxy_port, proxy_key: config.proxy_key };
+
   const allResults = [];
   // Limit to 5 queries to control latency
   const limitedQueries = queries.slice(0, 5);
 
   for (const query of limitedQueries) {
     try {
-      const results = await adapter(query, vsConfig);
+      const results = await adapter(query, adapterConfig);
       if (results.length > 0) {
         const formatted = results.map(r =>
           `[${r.source}] (score: ${r.score != null ? r.score.toFixed(3) : 'N/A'})\n${r.text}`

@@ -20,6 +20,11 @@ const DEFAULTS = {
     document_paths: [],
     enable_web_search: false,
   },
+  // Resolved at load time from env vars — no other module reads process.env
+  proxy_key: '',
+  proxy_port: 8888,
+  model: 'gemini-2.0-flash',
+  brave_api_key: null,
 };
 
 /**
@@ -108,7 +113,7 @@ function loadConfig() {
   }
 
   // Deep merge with defaults
-  return {
+  const merged = {
     ...DEFAULTS,
     ...fileConfig,
     knowledge_sources: {
@@ -116,6 +121,25 @@ function loadConfig() {
       ...(fileConfig.knowledge_sources || {}),
     },
   };
+
+  // Resolve env vars once — no other module should read process.env
+  merged.proxy_key = process.env.SIDECAR_PROXY_KEY || process.env.OPENCLAW_PROXY_KEY || merged.proxy_key || '';
+  merged.proxy_port = parseInt(process.env.OPENCLAW_PROXY_PORT || String(merged.proxy_port), 10);
+  merged.model = process.env.COVE_MODEL || merged.model_override || merged.model;
+  merged.brave_api_key = process.env.BRAVE_API_KEY || resolveBraveKeyFromFile() || merged.brave_api_key || null;
+
+  return merged;
+}
+
+/**
+ * Read Brave API key from the standard OpenClaw file location.
+ * @returns {string|null}
+ */
+function resolveBraveKeyFromFile() {
+  try {
+    const keyPath = path.join(process.env.HOME || '', '.openclaw', '.brave-api-key');
+    return fs.readFileSync(keyPath, 'utf8').trim() || null;
+  } catch { return null; }
 }
 
 module.exports = { loadConfig, parseSimpleYaml };

@@ -11,7 +11,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const HOME = process.env.HOME || '/home/bk';
+const HOME = require('os').homedir();
 const OPENCLAW_DIR = path.join(HOME, '.openclaw');
 const WORKSPACE = path.join(OPENCLAW_DIR, 'workspace');
 const MEMORY_DIR = path.join(WORKSPACE, 'memory');
