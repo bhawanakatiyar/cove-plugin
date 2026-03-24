@@ -12,7 +12,7 @@
 
 const { loadConfig, parseSimpleYaml } = require('./src/config');
 const { loadKnowledge, readDir } = require('./src/knowledge');
-const { getBraveApiKey } = require('./src/web_search');
+const { braveSearch } = require('./src/web_search');
 const { logResult } = require('./src/csm-logger');
 
 let passed = 0;
@@ -95,9 +95,17 @@ assert(logOutput.includes('wrong claim'), 'Logger reports inaccuracies');
 
 console.log('\n🌐 Web search tests');
 
-const braveKey = getBraveApiKey();
-assert(typeof getBraveApiKey === 'function', 'getBraveApiKey is a function');
-console.log(`    Brave API key: ${braveKey ? 'found' : 'not configured'}`);
+assert(typeof braveSearch === 'function', 'braveSearch is a function');
+assert(config.brave_api_key === null || typeof config.brave_api_key === 'string', 'brave_api_key resolved in config');
+console.log(`    Brave API key: ${config.brave_api_key ? 'found' : 'not configured'}`);
+
+// Direct LLM provider tests
+console.log('\n🤖 LLM provider tests');
+
+assert(config.llm_provider === null || typeof config.llm_provider === 'string', 'llm_provider resolved in config');
+assert(config.llm_api_key === null || typeof config.llm_api_key === 'string', 'llm_api_key resolved in config');
+console.log(`    LLM provider: ${config.llm_provider || 'sidecar (default)'}`);
+console.log(`    LLM API key: ${config.llm_api_key ? 'found' : 'not set (will use sidecar)'}`);
 
 // ── Vector store tests ──────────────────────────────────────────────────────
 
